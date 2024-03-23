@@ -2,192 +2,179 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class Particle:
-	def __init__(self, x, y, vx, vy, mass):
+	""" Class representing a particle in a 2D space
+        
+    :param x: x-coordinate of the particle
+	:param y: y-coordinate of the particle
+	:param vx: x-component of the velocity of the particle
+	:param vy: y-component of the velocity of the particle
+	:param mass: mass of the particle
+    """
+
+	def __init__(self, x: float, y: float, vx: float, vy: float, mass: float):
 		self.position = np.array([x, y])
 		self.velocity = np.array([vx, vy])
 		self.mass = mass
 		
-	def getAcceleration(self, rhs, softening) -> np.array:
+	def getAcceleration(self, rhs: 'Particle', softening: float) -> np.array:
+		""" Returns the acceleration of the particle due to another particle
+		
+		:param rhs: the other particle
+		:param softening: softening factor to avoid division by zero
+		"""
 		G = 6.67430e-11
 		dPosition = rhs.position - self.position
 		return G * rhs.mass * dPosition / (np.dot(dPosition, dPosition) + softening)**1.5
 
+	def getPotentialEnergy(self, rhs: 'Particle', softening: float) -> float:
+		""" Returns the potential energy of the particle due to another particle
+
+		:param rhs: the other particle
+		:param softening: softening factor to avoid division by zero
+		"""
+		G = 6.67430e-11
+		dPosition = rhs.position - self.position
+		return G * self.mass * rhs.mass / np.sqrt(np.dot(dPosition, dPosition) + softening)
+	
 	def getKineticEnergy(self) -> float:
+		""" Returns the kinetic energy of the particle """
 		return 0.5 * self.mass * np.dot(self.velocity, self.velocity)
 
-	def getPotentialEnergy(self, rhs) -> float:
-		pass
-
-	def move(self, acceleration, dt) -> None:
-		self.vel += acceleration * dt
-		self.pos += self.vel * dt
+	def move(self, acceleration: np.array, dt: float) -> None:
+		""" Moves the particle based on the acceleration and the time step
+		:param acceleration: the acceleration acting on the particle
+		:param dt: the time step
+		"""
+		self.velocity += acceleration * dt
+		self.position += self.velocity * dt
 		
 class StarSystem:
-	def __init__(self, particles):
+	""" Class representing a system of particles. The softening parameter is calculated based on this paper: https://academic.oup.com/mnras/article/314/3/475/969154
+
+	:param particles: list of particles in the system
+	"""
+
+	def __init__(self, particles: list[Particle]):
 		self.particles = particles
 		self.n = len(particles)
-		self.softening = 0.1
+		self.softening = (0.98 * self.n**-0.26)**2
 		
-	def getForces(self):
-		totalAcceleration = np.zeros((1, 2))
+	def getAccelerations(self):
+		""" Returns the accelerations of all particles in the system """
+		accelerations = []
+		for i in range(self.n):
+			acceleration = np.zeros(2)
+			for j in range(self.n):
+				if i != j:
+					acceleration += self.particles[i].getAcceleration(self.particles[j], self.softening)
+			accelerations.append(acceleration)
+
+		return accelerations
+
+	def kineticEnergy(self):
+		""" Returns the total kinetic energy of the system """
+		energy = 0
+		for particle in range(self.particles):
+			energy += particle.getKineticEnergy()
+		return energy
+
+	def potentialEnergy(self):
+		""" Returns the total potential energy of the system """
+		energy = 0
 		for i in range(self.n):
 			for j in range(i+1, self.n):
-				forces[i, j] = self.particles[i].getAcceleration(self.particles[j], softening)
-				forces[j, i] = -forces[i, j]
-		return forces
+				energy += self.particles[i].getPotentialEnergy(self.particles[j], self.softening)
+		return energy
+	
+	def getTotalEnergy(self):
+		""" Returns the total energy of the system """
+		return self.kineticEnergy() + self.potentialEnergy()
 
-	def evolve(self, dt, softening):
-		forces = self.getForces(softening)
+	def evolve(self, dt: float):
+		""" Evolves the system based on the time step """
+		accelerations = self.getAccelerations()
 		for i in range(self.n):
-			self.particles[i].move(np.sum(forces[i], axis=0), dt)
-		return self
+			self.particles[i].move(accelerations[i], dt)
 	
-def getEnergy( pos, vel, mass, G ):
-	"""
-	Get kinetic energy (KE) and potential energy (PE) of simulation
-	pos is N x 3 matrix of positions
-	vel is N x 3 matrix of velocities
-	mass is an N x 1 vector of masses
-	G is Newton's Gravitational constant
-	KE is the kinetic energy of the system
-	PE is the potential energy of the system
-	"""
-	# Kinetic Energy:
-	KE = 0.5 * np.sum(np.sum( mass * vel**2 ))
-
-
-	# Potential Energy:
-
-	# positions r = [x,y,z] for all particles
-	x = pos[:,0:1]
-	y = pos[:,1:2]
-	z = pos[:,2:3]
-
-	# matrix that stores all pairwise particle separations: r_j - r_i
-	dx = x.T - x
-	dy = y.T - y
-	dz = z.T - z
-
-	# matrix that stores 1/r for all particle pairwise particle separations 
-	inv_r = np.sqrt(dx**2 + dy**2 + dz**2)
-	inv_r[inv_r>0] = 1.0/inv_r[inv_r>0]
-
-	# sum over upper triangle, to count each interaction only once
-	PE = G * np.sum(np.sum(np.triu(-(mass*mass.T)*inv_r,1)))
-	
-	return KE, PE;
-
+def solarSystem():
+	""" Returns a list of particles representing the solar system """
+	sun     = Particle(0.0,      0.0,      0.0,    0.0,      1.98847e30)
+	mercury = Particle(5.79e10,  0.0,      0.0,    4.74e4,   3.3011e23)
+	venus   = Particle(0.0,      1.08e11,  3.50e4, 0,        4.8673e24)
+	earth   = Particle(-1.50e11, 0,        0.0,    2.9783e4, 5.97219e24)
+	mars    = Particle(0.0,      -2.28e11, 2.41e4, 0,        6.4169e23)
+	jupiter = Particle(7.78e11,  0,        0.0,    1.31e4,   1.8981e27)
+	saturn  = Particle(0.0,      1.43e12,  9.64e3, 0,        5.68232e26)
+	uranus  = Particle(-2.88e12, 0.0,      0.0,    6.7991e3, 8.6810e25)
+	neptune = Particle(0.0,      -4.50e12, 5.43e3, 0,        1.0241e26)
+	return [sun, mercury, venus, earth, mars, jupiter, saturn, uranus, neptune]
 
 def main():
-	""" N-body simulation """
-	
-	# Simulation parameters
-	N         = 100    # Number of particles
-	t         = 0      # current time of the simulation
-	tEnd      = 10.0   # time at which simulation ends
-	dt        = 0.01   # timestep
-	softening = 0.1    # softening length
-	G         = 1.0    # Newton's Gravitational Constant
-	plotRealTime = True # switch on for plotting as the simulation goes along
-	
-	# Generate Initial Conditions
-	np.random.seed(17)            # set the random number generator seed
-	
-	mass = 20.0*np.ones((N,1))/N  # total mass of particles is 20
-	pos  = np.random.randn(N,3)   # randomly selected positions and velocities
-	vel  = np.random.randn(N,3)
-	
-	# Convert to Center-of-Mass frame
-	vel -= np.mean(mass * vel,0) / np.mean(mass)
-	
-	# calculate initial gravitational accelerations
-	acc = getAcc( pos, mass, G, softening )
-	
-	# calculate initial energy of system
-	KE, PE  = getEnergy( pos, vel, mass, G )
-	
-	# number of timesteps
-	Nt = int(np.ceil(tEnd/dt))
-	
-	# save energies, particle orbits for plotting trails
-	pos_save = np.zeros((N,3,Nt+1))
-	pos_save[:,:,0] = pos
-	KE_save = np.zeros(Nt+1)
-	KE_save[0] = KE
-	PE_save = np.zeros(Nt+1)
-	PE_save[0] = PE
-	t_all = np.arange(Nt+1)*dt
-	
-	# prep figure
-	fig = plt.figure(figsize=(4,5), dpi=80)
-	grid = plt.GridSpec(3, 1, wspace=0.0, hspace=0.3)
-	ax1 = plt.subplot(grid[0:2,0])
-	ax2 = plt.subplot(grid[2,0])
-	
-	# Simulation Main Loop
-	for i in range(Nt):
-		# (1/2) kick
-		vel += acc * dt/2.0
-		
-		# drift
-		pos += vel * dt
-		
-		# update accelerations
-		acc = getAcc( pos, mass, G, softening )
-		
-		# (1/2) kick
-		vel += acc * dt/2.0
-		
-		# update time
-		t += dt
-		
-		# get energy of system
-		KE, PE  = getEnergy( pos, vel, mass, G )
-		
-		# save energies, positions for plotting trail
-		pos_save[:,:,i+1] = pos
-		KE_save[i+1] = KE
-		PE_save[i+1] = PE
-		
-		# plot in real time
-		if plotRealTime or (i == Nt-1):
-			plt.sca(ax1)
-			plt.cla()
-			xx = pos_save[:,0,max(i-50,0):i+1]
-			yy = pos_save[:,1,max(i-50,0):i+1]
-			plt.scatter(xx,yy,s=1,color=[.7,.7,1])
-			plt.scatter(pos[:,0],pos[:,1],s=10,color='blue')
-			ax1.set(xlim=(-2, 2), ylim=(-2, 2))
-			ax1.set_aspect('equal', 'box')
-			ax1.set_xticks([-2,-1,0,1,2])
-			ax1.set_yticks([-2,-1,0,1,2])
-			
-			plt.sca(ax2)
-			plt.cla()
-			plt.scatter(t_all,KE_save,color='red',s=1,label='KE' if i == Nt-1 else "")
-			plt.scatter(t_all,PE_save,color='blue',s=1,label='PE' if i == Nt-1 else "")
-			plt.scatter(t_all,KE_save+PE_save,color='black',s=1,label='Etot' if i == Nt-1 else "")
-			ax2.set(xlim=(0, tEnd), ylim=(-300, 300))
-			ax2.set_aspect(0.007)
-			
-			plt.pause(0.001)
-	    
-	
-	
-	# add labels/legend
-	plt.sca(ax2)
-	plt.xlabel('time')
-	plt.ylabel('energy')
-	ax2.legend(loc='upper right')
-	
-	# Save figure
-	plt.savefig('nbody.png',dpi=240)
-	plt.show()
-	    
-	return 0
-	
+	DAY = 24*60*60
+	MONTH = 30*DAY
+	YEAR = 12*MONTH
 
+	tEnd = 100 * YEAR  
+	dt = 5 * DAY
+	iterations = int(tEnd/dt) 
 
+	system = StarSystem(solarSystem())
+
+	ax1 = plt.subplot(111)	
+	ax1.set_title('Solar System')
+	ax1.set_xlabel('x (m)')
+	ax1.set_ylabel('y (m)')
+	
+	mercuryTrajectory = ax1.plot([], [], color='gray')
+	venusTrajectory = ax1.plot([], [], color='orange')
+	earthTrajectory = ax1.plot([], [], color='blue')
+	marsTrajectory = ax1.plot([], [], color='red')
+	jupiterTrajectory = ax1.plot([], [], color='brown')
+	saturnTrajectory = ax1.plot([], [], color='brown')
+	uranusTrajectory = ax1.plot([], [], color='blue')
+	neptuneTrajectory = ax1.plot([], [], color='blue')
+	
+	plt.sca(ax1)
+	ax1.set(xlim=(-5e12, 5e12), ylim=(-5e12, 5e12))
+	ax1.set_aspect('equal', 'box')
+
+	for _ in range(iterations):
+		system.evolve(dt)
+		
+		mercuryTrajectory[0].set_data(
+			np.append(mercuryTrajectory[0].get_xdata(), system.particles[1].position[0]),
+			np.append(mercuryTrajectory[0].get_ydata(), system.particles[1].position[1]))
+
+		venusTrajectory[0].set_data(
+			np.append(venusTrajectory[0].get_xdata(), system.particles[2].position[0]),
+			np.append(venusTrajectory[0].get_ydata(), system.particles[2].position[1]))
+
+		earthTrajectory[0].set_data(
+			np.append(earthTrajectory[0].get_xdata(), system.particles[3].position[0]),
+			np.append(earthTrajectory[0].get_ydata(), system.particles[3].position[1]))
+
+		marsTrajectory[0].set_data(
+			np.append(marsTrajectory[0].get_xdata(), system.particles[4].position[0]),
+			np.append(marsTrajectory[0].get_ydata(), system.particles[4].position[1]))
+
+		jupiterTrajectory[0].set_data(
+			np.append(jupiterTrajectory[0].get_xdata(), system.particles[5].position[0]),
+			np.append(jupiterTrajectory[0].get_ydata(), system.particles[5].position[1]))
+
+		saturnTrajectory[0].set_data(
+			np.append(saturnTrajectory[0].get_xdata(), system.particles[6].position[0]),
+			np.append(saturnTrajectory[0].get_ydata(), system.particles[6].position[1]))
+
+		uranusTrajectory[0].set_data(
+			np.append(uranusTrajectory[0].get_xdata(), system.particles[7].position[0]),
+			np.append(uranusTrajectory[0].get_ydata(), system.particles[7].position[1]))
+
+		neptuneTrajectory[0].set_data(
+			np.append(neptuneTrajectory[0].get_xdata(), system.particles[8].position[0]),
+			np.append(neptuneTrajectory[0].get_ydata(), system.particles[8].position[1]))
+
+		plt.pause(0.000001)	
+		plt.draw()
   
 if __name__== "__main__":
   main()
