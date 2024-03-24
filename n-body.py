@@ -48,7 +48,7 @@ class Particle:
 		self.velocity += acceleration * dt
 		self.position += self.velocity * dt
 		
-class StarSystem:
+class StarSystem:	
 	""" Class representing a system of particles. The softening parameter is calculated based on this paper: https://academic.oup.com/mnras/article/314/3/475/969154
 
 	:param particles: list of particles in the system
