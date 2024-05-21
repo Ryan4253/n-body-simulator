@@ -17,15 +17,15 @@ class Particle{
         return mass; 
     }
 
-    inline Vector3d getPosition() const{ 
+    inline const Vector3d& getPosition() const{ 
         return position; 
     }
 
-    inline Vector3d getVelocity() const{ 
+    inline const Vector3d& getVelocity() const{ 
         return velocity; 
     }
 
-    inline Vector3d getAcceleration() const{ 
+    inline const Vector3d& getAcceleration() const{ 
         return acceleration; 
     }
 
